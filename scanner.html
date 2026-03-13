@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>ARB SCANNER — Polymarket × Kalshi</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:       #050608;
+    --bg2:      #0a0c10;
+    --bg3:      #0f1218;
+    --border:   rgba(255,255,255,0.06);
+    --green:    #00e87a;
+    --green2:   rgba(0,232,122,0.08);
+    --amber:    #f5a623;
+    --red:      #ff3d55;
+    --blue:     #4a9eff;
+    --purple:   #a78bfa;
+    --text:     #dde3ed;
+    --muted:    #3d4a5c;
+    --mid:      #64748b;
+    --mono:     'Syne Mono', monospace;
+    --sans:     'Syne', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(5,6,8,0.95);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 28px 12px;
+  }
+  .header-row1 {
+    display: flex; align-items: center;
+    justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .logo-mark {
+    width: 32px; height: 32px;
+    border: 2px solid var(--green);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+    flex-shrink: 0;
+  }
+  .logo-mark::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: var(--green2);
+  }
+  .logo-mark svg { position: relative; z-index: 1; }
+  .logo-text h1 {
+    font-family: var(--mono);
+    font-size: 13px; letter-spacing: 2px;
+    color: var(--text); line-height: 1;
+  }
+  .logo-text p {
+    font-size: 10px; color: var(--muted);
+    letter-spacing: 1.5px; text-transform: uppercase;
+    margin-top: 3px;
+  }
+
+  .header-stats {
+    display: flex; gap: 20px; flex-wrap: wrap;
+  }
+  .hstat { text-align: right; }
+  .hstat-val {
+    font-family: var(--mono);
+    font-size: 20px; line-height: 1;
+    color: var(--text);
+  }
+  .hstat-val.g { color: var(--green); }
+  .hstat-lbl {
+    font-size: 9px; color: var(--muted);
+    letter-spacing: 1.5px; text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .header-row2 {
+    display: flex; align-items: center;
+    gap: 8px; margin-top: 12px; flex-wrap: wrap;
+  }
+  .pill {
+    padding: 4px 12px; border-radius: 20px;
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: 1px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted);
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .pill.on {
+    border-color: rgba(0,232,122,0.4);
+    background: var(--green2); color: var(--green);
+  }
+  .spacer { flex: 1; }
+  .status-bar {
+    font-family: var(--mono); font-size: 10px;
+    color: var(--muted); letter-spacing: 0.5px;
+  }
+  .arb-live {
+    font-family: var(--mono); font-size: 10px;
+    color: var(--green); background: var(--green2);
+    border: 1px solid rgba(0,232,122,0.25);
+    border-radius: 4px; padding: 3px 9px;
+    letter-spacing: 1px; display: none;
+  }
+  .scan-btn {
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    padding: 6px 16px; border-radius: 5px;
+    border: 1px solid rgba(0,232,122,0.35);
+    background: var(--green2); color: var(--green);
+    cursor: pointer; transition: all 0.2s;
+  }
+  .scan-btn:hover { background: rgba(0,232,122,0.15); }
+  .scan-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .scan-btn.busy {
+    border-color: rgba(245,166,35,0.35);
+    background: rgba(245,166,35,0.08);
+    color: var(--amber);
+  }
+
+  /* ── CORS WARNING ── */
+  .cors-warn {
+    margin: 16px 28px 0;
+    padding: 12px 16px;
+    border-radius: 8px;
+    background: rgba(245,166,35,0.06);
+    border: 1px solid rgba(245,166,35,0.2);
+    font-size: 12px; color: #a0856a; line-height: 1.6;
+    display: none;
+  }
+  .cors-warn strong { color: var(--amber); }
+  .cors-warn a { color: var(--amber); }
+
+  /* ── ERROR BANNER ── */
+  .err-banner {
+    margin: 16px 28px 0;
+    padding: 12px 16px; border-radius: 8px;
+    background: rgba(255,61,85,0.06);
+    border: 1px solid rgba(255,61,85,0.2);
+    font-size: 12px; color: #c08090; display: none;
+  }
+
+  /* ── MAIN ── */
+  main { padding: 16px 28px 60px; }
+
+  /* ── PAIR CARD ── */
+  .pair {
+    border-radius: 10px; margin-bottom: 7px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.012);
+    overflow: hidden; transition: border-color 0.2s;
+  }
+  .pair.arb {
+    border-color: rgba(0,232,122,0.2);
+    background: rgba(0,232,122,0.018);
+  }
+  .pair-head {
+    display: flex; align-items: center;
+    gap: 10px; padding: 11px 15px;
+    cursor: pointer; flex-wrap: wrap;
+  }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+    transition: all 0.3s;
+  }
+  .dot.live {
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 6px var(--green); }
+    50% { box-shadow: 0 0 14px var(--green); }
+  }
+
+  .pair-q { flex: 1; min-width: 180px; }
+  .pair-q-main {
+    font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.4;
+  }
+  .pair-q-sub {
+    font-size: 10px; color: var(--muted);
+    margin-top: 2px; display: flex; align-items: center; gap: 5px;
+  }
+  .ptag {
+    font-size: 8px; font-weight: 700; letter-spacing: 1px;
+    padding: 1px 5px; border-radius: 3px;
+    text-transform: uppercase;
+  }
+  .ptag.p { background: rgba(74,158,255,0.12); color: #7ab8ff; }
+  .ptag.k { background: rgba(167,139,250,0.12); color: #c4b5fd; }
+
+  .prices {
+    display: flex; gap: 4px; flex-wrap: wrap;
+  }
+  .pc {
+    display: flex; flex-direction: column;
+    align-items: center; padding: 4px 8px;
+    border-radius: 5px; min-width: 54px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .pc.hl {
+    background: rgba(0,232,122,0.07);
+    border-color: rgba(0,232,122,0.22);
+  }
+  .pc-lbl {
+    font-family: var(--mono); font-size: 8px;
+    color: var(--muted); letter-spacing: 0.8px;
+  }
+  .pc-val {
+    font-family: var(--mono); font-size: 13px;
+    font-weight: 600; color: var(--text); margin-top: 1px;
+  }
+  .pc.hl .pc-val { color: var(--green); }
+
+  .badge {
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    padding: 3px 9px; border-radius: 4px; white-space: nowrap;
+  }
+  .badge.arb { background: rgba(0,232,122,0.1); border: 1px solid rgba(0,232,122,0.28); color: var(--green); }
+  .badge.arb.hi { background: rgba(245,166,35,0.1); border-color: rgba(245,166,35,0.28); color: var(--amber); }
+  .badge.none { color: var(--muted); font-size: 10px; }
+  .chev { color: var(--muted); font-size: 10px; flex-shrink: 0; }
+
+  /* ── EXPANDED ── */
+  .pair-body {
+    border-top: 1px solid var(--border);
+    padding: 13px 15px;
+    display: flex; gap: 18px; flex-wrap: wrap;
+  }
+  .pb-section { flex: 1; min-width: 190px; }
+  .pb-title {
+    font-size: 9px; color: var(--muted);
+    letter-spacing: 1.5px; text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .strat {
+    background: rgba(0,232,122,0.05);
+    border: 1px solid rgba(0,232,122,0.12);
+    border-radius: 7px; padding: 10px 12px; margin-bottom: 7px;
+  }
+  .strat-head {
+    display: flex; justify-content: space-between;
+    align-items: center; margin-bottom: 6px;
+  }
+  .strat-name { font-family: var(--mono); font-size: 10px; color: var(--mid); }
+  .strat-legs { display: flex; flex-direction: column; gap: 3px; }
+  .strat-leg { font-family: var(--mono); font-size: 11px; color: var(--green); }
+  .strat-math {
+    margin-top: 7px; font-size: 11px; color: var(--muted);
+    display: flex; gap: 14px; flex-wrap: wrap;
+  }
+  .strat-math b { font-family: var(--mono); color: var(--green); font-weight: 600; }
+  .no-arb { font-size: 12px; color: var(--muted); }
+
+  .meta { font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+  .meta span { font-family: var(--mono); color: var(--mid); }
+  .mkt-links { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .mkt-link {
+    font-size: 10px; font-family: var(--mono);
+    padding: 4px 10px; border-radius: 4px;
+    text-decoration: none; letter-spacing: 0.5px;
+    transition: opacity 0.15s;
+  }
+  .mkt-link:hover { opacity: 0.7; }
+  .mkt-link.p { background: rgba(74,158,255,0.1); border: 1px solid rgba(74,158,255,0.22); color: #7ab8ff; }
+  .mkt-link.k { background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.22); color: #c4b5fd; }
+
+  /* ── EMPTY STATE ── */
+  .empty {
+    text-align: center; padding: 80px 0;
+    color: var(--muted);
+  }
+  .empty-icon {
+    font-size: 48px; margin-bottom: 12px;
+    animation: spin 8s linear infinite;
+    display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty h2 { font-size: 15px; font-family: var(--mono); color: var(--mid); margin-bottom: 6px; }
+  .empty p { font-size: 12px; }
+
+  /* ── FOOTER NOTE ── */
+  .footnote {
+    margin-top: 24px; padding: 12px 15px;
+    border-radius: 8px; background: rgba(255,255,255,0.015);
+    border: 1px solid var(--border);
+    font-size: 11px; color: var(--muted); line-height: 1.8;
+  }
+  .footnote strong { color: var(--mid); }
+  code {
+    font-family: var(--mono); font-size: 10px;
+    background: rgba(255,255,255,0.05); color: var(--mid);
+    padding: 1px 5px; border-radius: 3px;
+  }
+
+  /* ── LOADING SKELETON ── */
+  .skeleton {
+    border-radius: 10px; height: 52px; margin-bottom: 7px;
+    background: linear-gradient(90deg,
+      rgba(255,255,255,0.02) 25%,
+      rgba(255,255,255,0.05) 50%,
+      rgba(255,255,255,0.02) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite;
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-row1">
+    <div class="logo">
+      <div class="logo-mark">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M2 8 L8 2 L14 8 L8 14 Z" stroke="#00e87a" stroke-width="1.5" fill="none"/>
+          <circle cx="8" cy="8" r="2" fill="#00e87a"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <h1>POLY × KALSHI ARB SCANNER</h1>
+        <p>Cross-Market Arbitrage Detector — Standalone Edition</p>
+      </div>
+    </div>
+    <div class="header-stats">
+      <div class="hstat"><div class="hstat-val" id="sPoly">—</div><div class="hstat-lbl">Poly Mkts</div></div>
+      <div class="hstat"><div class="hstat-val" id="sKalshi">—</div><div class="hstat-lbl">Kalshi Mkts</div></div>
+      <div class="hstat"><div class="hstat-val" id="sPairs">—</div><div class="hstat-lbl">Pairs</div></div>
+      <div class="hstat"><div class="hstat-val g" id="sArbs">—</div><div class="hstat-lbl">Arbs</div></div>
+    </div>
+  </div>
+  <div class="header-row2">
+    <button class="pill on" data-f="all" onclick="setFilter('all')">ALL</button>
+    <button class="pill" data-f="arb" onclick="setFilter('arb')">ARB ONLY</button>
+    <div class="spacer"></div>
+    <span class="status-bar" id="statusBar">Press SCAN to begin</span>
+    <span class="arb-live" id="arbLive"></span>
+    <button class="scan-btn" id="scanBtn" onclick="doScan()">⟳ SCAN NOW</button>
+  </div>
+</header>
+
+<div class="cors-warn" id="corsWarn">
+  <strong>⚠ Kalshi API blocked by browser (CORS)</strong> — Kalshi restricts direct browser access to their API.
+  Only Polymarket data is shown. To get Kalshi data, run the full Node.js version on a server, or use
+  <a href="https://kalshi.com" target="_blank">Kalshi.com</a> directly for comparison.
+  Polymarket-only arb detection (internal sum &lt; $1) still works below.
+</div>
+
+<div class="err-banner" id="errBanner"></div>
+
+<main>
+  <div id="pairList">
+    <div class="empty">
+      <div class="empty-icon">◈</div>
+      <h2>AWAITING SCAN</h2>
+      <p>Click SCAN NOW to fetch live markets and detect arbitrage</p>
+    </div>
+  </div>
+  <div class="footnote">
+    <strong>Arb logic:</strong>
+    <code>poly.yes + kalshi.no &lt; $1</code> or <code>kalshi.yes + poly.no &lt; $1</code> = guaranteed profit on settlement.
+    &nbsp;·&nbsp; Prices are live from Polymarket Gamma API.
+    &nbsp;·&nbsp; Kalshi mid-price = (bid+ask)/2.
+    &nbsp;·&nbsp; Always verify order book depth before executing.
+    &nbsp;·&nbsp; Auto-refreshes every 20s after first scan.
+  </div>
+</main>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+let allPairs   = [];
+let activeFilter = 'all';
+let expandedId  = null;
+let scanCount   = 0;
+let refreshTimer = null;
+let kalshiFailed = false;
+
+// ══════════════════════════════════════════════════════
+//  POLYMARKET API  (CORS-open)
+// ══════════════════════════════════════════════════════
+async function fetchPoly() {
+  const url = 'https://gamma-api.polymarket.com/markets?active=true&closed=false&limit=200&order=volume24hr&ascending=false';
+  const r = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!r.ok) throw new Error(`Polymarket API ${r.status}`);
+  const data = await r.json();
+  return (data || [])
+    .filter(m => m.outcomePrices && m.question)
+    .map(m => {
+      try {
+        const p = JSON.parse(m.outcomePrices);
+        if (p.length !== 2) return null;
+        const yes = parseFloat(p[0]), no = parseFloat(p[1]);
+        if (isNaN(yes) || isNaN(no) || yes <= 0 || no <= 0) return null;
+        return {
+          id: m.id, source: 'poly',
+          question: m.question,
+          yes, no,
+          sum: +((yes+no).toFixed(4)),
+          vol24: m.volume24hr || 0,
+          endDate: m.endDate || null,
+          url: `https://polymarket.com/event/${m.slug || m.id}`,
+          kw: keywords(m.question),
+        };
+      } catch { return null; }
+    })
+    .filter(Boolean);
+}
+
+// ══════════════════════════════════════════════════════
+//  KALSHI API  (may be blocked by CORS in browser)
+// ══════════════════════════════════════════════════════
+async function fetchKalshi() {
+  const url = 'https://trading-api.kalshi.com/trade-api/v2/markets?limit=200&status=open';
+  const r = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!r.ok) throw new Error(`Kalshi API ${r.status}`);
+  const data = await r.json();
+  return (data.markets || [])
+    .filter(m => m.yes_bid != null && m.title)
+    .map(m => {
+      const yb = m.yes_bid/100, ya = m.yes_ask/100;
+      const nb = m.no_bid/100,  na = m.no_ask/100;
+      const yes = +((yb+ya)/2).toFixed(4);
+      const no  = +((nb+na)/2).toFixed(4);
+      return {
+        id: m.ticker, source: 'kalshi',
+        question: m.title,
+        yes, no, yesAsk: ya, noAsk: na,
+        sum: +((yes+no).toFixed(4)),
+        vol: m.volume || 0,
+        endDate: m.close_time || null,
+        url: `https://kalshi.com/markets/${m.ticker}`,
+        kw: keywords(m.title),
+      };
+    });
+}
+
+// ══════════════════════════════════════════════════════
+//  KEYWORD MATCHING  (Jaccard similarity)
+// ══════════════════════════════════════════════════════
+const STOP = new Set(['will','the','a','an','be','is','are','was','were','in','on',
+  'at','to','for','of','and','or','by','with','does','do','has','have','from',
+  'than','more','less','above','below','before','after','end','win','lose',
+  'what','when','which','who','how','yes','no','not','its','it','this','that']);
+
+function keywords(text) {
+  return text.toLowerCase().replace(/[^a-z0-9\s%$]/g,' ')
+    .split(/\s+/).filter(w => w.length > 2 && !STOP.has(w));
+}
+
+function jaccard(a, b) {
+  const sa = new Set(a), sb = new Set(b);
+  const inter = [...sa].filter(w => sb.has(w)).length;
+  const union = new Set([...sa,...sb]).size;
+  return union ? inter/union : 0;
+}
+
+const THRESHOLD = 0.18;
+
+// ══════════════════════════════════════════════════════
+//  ARB CALCULATION
+// ══════════════════════════════════════════════════════
+function calcArb(poly, kalshi) {
+  const strats = [];
+  const s1 = +(poly.yes + kalshi.no).toFixed(4);
+  const s2 = +(kalshi.yes + poly.no).toFixed(4);
+  if (s1 < 1.0) {
+    const profit = +(1-s1).toFixed(4);
+    strats.push({
+      label: 'YES(Poly) + NO(Kalshi)',
+      legs: [
+        { plat:'Polymarket', side:'YES', price: poly.yes,         url: poly.url },
+        { plat:'Kalshi',     side:'NO',  price: kalshi.noAsk||kalshi.no, url: kalshi.url },
+      ],
+      cost: s1, profit,
+      pct:  +((profit/s1)*100).toFixed(3),
+      per100: +(profit*100).toFixed(2),
+    });
+  }
+  if (s2 < 1.0) {
+    const profit = +(1-s2).toFixed(4);
+    strats.push({
+      label: 'YES(Kalshi) + NO(Poly)',
+      legs: [
+        { plat:'Kalshi',     side:'YES', price: kalshi.yesAsk||kalshi.yes, url: kalshi.url },
+        { plat:'Polymarket', side:'NO',  price: poly.no,           url: poly.url },
+      ],
+      cost: s2, profit,
+      pct:  +((profit/s2)*100).toFixed(3),
+      per100: +(profit*100).toFixed(2),
+    });
+  }
+  return strats.sort((a,b) => b.pct - a.pct);
+}
+
+// Also check Poly internal arb (sum < 1 within one platform)
+function polyInternalArb(poly) {
+  if (poly.sum >= 1.0) return null;
+  const profit = +(1 - poly.sum).toFixed(4);
+  return {
+    label: 'Poly Internal (YES + NO < $1)',
+    legs: [
+      { plat:'Polymarket', side:'YES', price: poly.yes, url: poly.url },
+      { plat:'Polymarket', side:'NO',  price: poly.no,  url: poly.url },
+    ],
+    cost: poly.sum, profit,
+    pct:  +((profit/poly.sum)*100).toFixed(3),
+    per100: +(profit*100).toFixed(2),
+  };
+}
+
+// ══════════════════════════════════════════════════════
+//  MATCH MARKETS
+// ══════════════════════════════════════════════════════
+function matchMarkets(polyList, kalshiList) {
+  const pairs = [];
+  const usedK = new Set();
+
+  for (const poly of polyList) {
+    let bestScore = THRESHOLD, bestK = null;
+    for (const k of kalshiList) {
+      if (usedK.has(k.id)) continue;
+      const sc = jaccard(poly.kw, k.kw);
+      if (sc > bestScore) { bestScore = sc; bestK = k; }
+    }
+    if (bestK) {
+      usedK.add(bestK.id);
+      const arbs = calcArb(poly, bestK);
+      const best = arbs[0] || null;
+      pairs.push({
+        id: poly.id, poly, kalshi: bestK,
+        score: +bestScore.toFixed(3),
+        arbs, hasArb: arbs.length > 0,
+        bestPct: best ? best.pct : 0,
+      });
+    } else {
+      // No Kalshi match — check for Poly internal arb
+      const ia = polyInternalArb(poly);
+      const arbs = ia ? [ia] : [];
+      pairs.push({
+        id: poly.id, poly, kalshi: null,
+        score: 0, arbs,
+        hasArb: arbs.length > 0,
+        bestPct: ia ? ia.pct : 0,
+        polyOnly: true,
+      });
+    }
+  }
+
+  return pairs.sort((a,b) => {
+    if (a.hasArb !== b.hasArb) return b.hasArb - a.hasArb;
+    return b.bestPct - a.bestPct || b.score - a.score;
+  });
+}
+
+// ══════════════════════════════════════════════════════
+//  MAIN SCAN
+// ══════════════════════════════════════════════════════
+async function doScan() {
+  if (document.getElementById('scanBtn').disabled) return;
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true; btn.textContent = '⟳ SCANNING...'; btn.className = 'scan-btn busy';
+  document.getElementById('errBanner').style.display = 'none';
+  if (refreshTimer) clearTimeout(refreshTimer);
+
+  showSkeletons();
+
+  try {
+    let polyList = [], kalshiList = [];
+
+    // Fetch Polymarket (almost always works in browser)
+    try {
+      polyList = await fetchPoly();
+      document.getElementById('sPoly').textContent = polyList.length;
+    } catch(e) {
+      showError('Polymarket API error: ' + e.message);
+      return;
+    }
+
+    // Try Kalshi — may fail due to CORS in browser
+    try {
+      kalshiList = await fetchKalshi();
+      document.getElementById('sKalshi').textContent = kalshiList.length;
+      document.getElementById('corsWarn').style.display = 'none';
+      kalshiFailed = false;
+    } catch(e) {
+      kalshiFailed = true;
+      document.getElementById('sKalshi').textContent = '—';
+      document.getElementById('corsWarn').style.display = '';
+    }
+
+    allPairs = matchMarkets(polyList, kalshiList);
+    scanCount++;
+
+    const arbCount = allPairs.filter(p => p.hasArb).length;
+    document.getElementById('sPairs').textContent = allPairs.length;
+    document.getElementById('sArbs').textContent  = arbCount;
+
+    const liveEl = document.getElementById('arbLive');
+    if (arbCount > 0) {
+      liveEl.style.display = '';
+      liveEl.textContent = `${arbCount} LIVE`;
+    } else {
+      liveEl.style.display = 'none';
+    }
+
+    document.getElementById('statusBar').textContent =
+      `Scan #${scanCount} · ${new Date().toLocaleTimeString()} · ${allPairs.length} pairs`;
+
+    render();
+
+  } catch(e) {
+    showError(e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '⟳ SCAN NOW'; btn.className = 'scan-btn';
+    refreshTimer = setTimeout(doScan, 20000);
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════════
+function render() {
+  const list = document.getElementById('pairList');
+  const pairs = activeFilter === 'arb' ? allPairs.filter(p => p.hasArb) : allPairs;
+
+  if (!pairs.length) {
+    list.innerHTML = `<div class="empty">
+      <div class="empty-icon">${activeFilter==='arb'?'◇':'◈'}</div>
+      <h2>${activeFilter==='arb'?'NO ARB DETECTED':'NO DATA'}</h2>
+      <p>${activeFilter==='arb'?'No opportunities right now — scanner will auto-refresh':'Run a scan first'}</p>
+    </div>`;
+    return;
+  }
+  list.innerHTML = pairs.map(renderCard).join('');
+  list.querySelectorAll('.pair-head').forEach(el => {
+    el.addEventListener('click', () => {
+      expandedId = expandedId === el.dataset.id ? null : el.dataset.id;
+      render();
+    });
+  });
+}
+
+function hl(pair, label) {
+  if (!pair.arbs.length) return false;
+  const best = pair.arbs[0];
+  return best.legs.some(l =>
+    (label.includes('P:YES') && l.side==='YES' && l.plat==='Polymarket') ||
+    (label.includes('P:NO')  && l.side==='NO'  && l.plat==='Polymarket') ||
+    (label.includes('K:YES') && l.side==='YES' && l.plat==='Kalshi') ||
+    (label.includes('K:NO')  && l.side==='NO'  && l.plat==='Kalshi')
+  );
+}
+
+function renderCard(p) {
+  const open = expandedId === p.id;
+  const best = p.arbs[0];
+
+  const priceCell = (lbl, val, hlFlag) =>
+    `<div class="pc ${hlFlag?'hl':''}">
+      <span class="pc-lbl">${lbl}</span>
+      <span class="pc-val">${val.toFixed(3)}</span>
+    </div>`;
+
+  const badgeHtml = () => {
+    if (!p.hasArb) {
+      const minS = p.kalshi
+        ? Math.min(p.poly.yes+p.kalshi.no, p.kalshi.yes+p.poly.no).toFixed(3)
+        : p.poly.sum.toFixed(3);
+      return `<span class="badge none">Σ=${minS}</span>`;
+    }
+    const cls = best.pct > 2 ? 'arb hi' : 'arb';
+    return `<span class="badge ${cls}">+${best.pct}%</span>`;
+  };
+
+  const kTag = p.kalshi
+    ? `<span class="ptag k">K</span><span style="color:#1e2a3a;font-size:10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.kalshi.question}</span>`
+    : `<span style="color:#1e2a3a;font-size:10px">No Kalshi match</span>`;
+
+  const kPrices = p.kalshi
+    ? priceCell('K:YES', p.kalshi.yes, hl(p,'K:YES')) + priceCell('K:NO', p.kalshi.no, hl(p,'K:NO'))
+    : '';
+
+  const detailHtml = open ? `<div class="pair-body">
+    <div class="pb-section">
+      <div class="pb-title">Strategies</div>
+      ${p.arbs.length === 0
+        ? `<div class="no-arb">No arb — all combinations cost ≥ $1.00</div>`
+        : p.arbs.map(a => `
+          <div class="strat">
+            <div class="strat-head">
+              <span class="strat-name">${a.label}</span>
+              <span class="badge arb ${a.pct>2?'hi':''}">+${a.pct}%</span>
+            </div>
+            <div class="strat-legs">
+              ${a.legs.map(l=>`<span class="strat-leg">✓ BUY ${l.side} @ ${l.plat}: $${l.price.toFixed(4)}</span>`).join('')}
+            </div>
+            <div class="strat-math">
+              <span>Cost: <b>$${a.cost.toFixed(4)}</b></span>
+              <span>Profit/$100: <b>$${a.per100}</b></span>
+              <span>Profit/$1k: <b>$${(a.per100*10).toFixed(2)}</b></span>
+            </div>
+          </div>`).join('')
+      }
+    </div>
+    <div class="pb-section" style="max-width:240px">
+      <div class="pb-title">Market Info</div>
+      ${p.kalshi ? `<div class="meta">Match score: <span>${(p.score*100).toFixed(0)}%</span></div>` : ''}
+      <div class="meta">Poly 24h vol: <span>$${Number(p.poly.vol24||0).toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
+      <div class="meta">Poly sum: <span>${p.poly.sum}</span></div>
+      ${p.kalshi ? `<div class="meta">Kalshi sum: <span>${p.kalshi.sum}</span></div>` : ''}
+      ${p.poly.endDate ? `<div class="meta">Resolves: <span>${new Date(p.poly.endDate).toLocaleDateString()}</span></div>` : ''}
+      <div class="mkt-links">
+        <a class="mkt-link p" href="${p.poly.url}" target="_blank" rel="noopener">↗ Polymarket</a>
+        ${p.kalshi ? `<a class="mkt-link k" href="${p.kalshi.url}" target="_blank" rel="noopener">↗ Kalshi</a>` : ''}
+      </div>
+    </div>
+  </div>` : '';
+
+  return `<div class="pair ${p.hasArb?'arb':''}">
+    <div class="pair-head" data-id="${p.id}">
+      <div class="dot ${p.hasArb?'live':''}"></div>
+      <div class="pair-q">
+        <div class="pair-q-main">${p.poly.question}</div>
+        <div class="pair-q-sub"><span class="ptag p">P</span>${kTag}</div>
+      </div>
+      <div class="prices">
+        ${priceCell('P:YES', p.poly.yes, hl(p,'P:YES'))}
+        ${priceCell('P:NO',  p.poly.no,  hl(p,'P:NO'))}
+        ${kPrices}
+      </div>
+      ${badgeHtml()}
+      <span class="chev">${open?'▲':'▼'}</span>
+    </div>
+    ${detailHtml}
+  </div>`;
+}
+
+function showSkeletons() {
+  document.getElementById('pairList').innerHTML =
+    Array(12).fill('<div class="skeleton"></div>').join('');
+}
+
+function showError(msg) {
+  const el = document.getElementById('errBanner');
+  el.style.display = '';
+  el.innerHTML = `<strong style="color:var(--red)">Error:</strong> ${msg}`;
+}
+
+function setFilter(f) {
+  activeFilter = f;
+  document.querySelectorAll('.pill').forEach(b => {
+    b.classList.toggle('on', b.dataset.f === f);
+  });
+  render();
+}
+</script>
+</body>
+</html>
